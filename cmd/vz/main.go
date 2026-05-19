@@ -9,8 +9,8 @@ import (
 	"syscall"
 
 	cli "github.com/jawher/mow.cli"
-	apiv1 "github.com/rtgnx/vzrun/internal/api/v1"
-	"github.com/rtgnx/vzrun/internal/cmds"
+	"github.com/rtgnx/vzrun/internal/vz"
+	apiv1 "github.com/rtgnx/vzrun/pkg/api/v1"
 )
 
 func init() {
@@ -24,25 +24,25 @@ func main() {
 
 	defer cancel()
 
-	app := cli.App(`vz`, `apple virtualization vms`)
+	app := cli.App(`vz`, `run lightweight Linux VMs on macOS`)
 
 	var (
 		socketPath string
 	)
 
-	app.StringOptPtr(&socketPath, `s socket`, path.Join(os.Getenv(`HOME`), `.vzrun/vzd.sock`), `socket path`)
+	app.StringOptPtr(&socketPath, `s socket`, path.Join(os.Getenv(`HOME`), `.vzrun/vzd.sock`), `daemon socket path`)
 
 	client := apiv1.NewClient(socketPath)
 
-	app.Command(`create`, `create vm`, cmds.CreateCmd(ctx, client))
-	app.Command(`run`, `run vm`, cmds.RunCmd(ctx, client))
-	app.Command(`ps`, `list vms`, cmds.PSCmd(ctx, client))
-	app.Command(`start`, `start vm`, cmds.StartCmd(ctx, client))
-	app.Command(`stop`, `stop vm`, cmds.StopCmd(ctx, client))
-	app.Command(`restart`, `restart vm`, cmds.RestartCmd(ctx, client))
-	app.Command(`attach`, `attach to vm console`, cmds.AttachCmd(ctx, client))
-	app.Command(`logs`, `stream vm logs`, cmds.LogsCmd(ctx, client))
-	app.Command(`delete`, `delete vm`, cmds.DeleteCmd(ctx, client))
+	app.Command(`create`, `create a VM from an OCI image`, vz.CreateCmd(ctx, client))
+	app.Command(`run`, `create and start a VM`, vz.RunCmd(ctx, client))
+	app.Command(`ps`, `list VMs and their states`, vz.PSCmd(ctx, client))
+	app.Command(`start`, `start an existing VM`, vz.StartCmd(ctx, client))
+	app.Command(`stop`, `stop a running VM`, vz.StopCmd(ctx, client))
+	app.Command(`restart`, `restart a VM`, vz.RestartCmd(ctx, client))
+	app.Command(`attach`, `attach to a VM console`, vz.AttachCmd(ctx, client))
+	app.Command(`logs`, `stream VM console logs`, vz.LogsCmd(ctx, client))
+	app.Command(`delete`, `delete a stopped VM`, vz.DeleteCmd(ctx, client))
 
 	app.Run(os.Args)
 }

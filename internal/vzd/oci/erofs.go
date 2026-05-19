@@ -5,29 +5,85 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/erofs/go-erofs"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"github.com/rtgnx/vzrun/internal/vzd/storage"
 )
 
-type ProgressFunc func(int64)
+type RootDiskBuilder struct {
+	store storage.Store
+}
 
-func NopProgress(int64) {}
+func NewRootDiskBuilder(store storage.Store) RootDiskBuilder {
+	return RootDiskBuilder{store: store}
+}
 
-func UntarToEroFS(ctx context.Context, img *erofs.Writer, r io.Reader, progress ProgressFunc) error {
-	if progress == nil {
-		progress = NopProgress
+func (b RootDiskBuilder) NewRootDisk(ctx context.Context, img CachedImage, name string) error {
+	key := storage.VMRootDiskKey(name)
+	_, err := b.store.Lookup(ctx, storage.KindVM, key)
+	if err == nil {
+		return nil
 	}
 
-	var extracted int64
-	tr := tar.NewReader(r)
+	if !os.IsNotExist(err) {
+		return err
+	}
+
+	ociImage, err := tarball.Image(
+		func() (io.ReadCloser, error) {
+			return img.Open(ctx)
+		},
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	rootfs := mutate.Extract(ociImage)
+	defer rootfs.Close()
+
+	fd, err := b.store.Create(ctx, storage.KindVM, key)
+	if err != nil {
+		return err
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			fd.Close()
+			_ = b.store.Remove(ctx, storage.KindVM, key)
+		}
+	}()
+
+	now := time.Now()
+	wr := erofs.Create(fd, erofs.WithBuildTime(uint64(now.Unix()), uint32(now.Nanosecond())))
+
+	if err := erofsFromTar(ctx, wr, tar.NewReader(rootfs)); err != nil {
+		return err
+	}
+	if err := wr.Close(); err != nil {
+		return err
+	}
+	if err := fd.Close(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+func erofsFromTar(ctx context.Context, w *erofs.Writer, r *tar.Reader) error {
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 
-		hdr, err := tr.Next()
+		hdr, err := r.Next()
 		if err == io.EOF {
 			return ctx.Err()
 		}
@@ -43,35 +99,37 @@ func UntarToEroFS(ctx context.Context, img *erofs.Writer, r io.Reader, progress 
 			continue
 		}
 
-		switch hdr.Typeflag {
-		case tar.TypeDir:
-			err = img.Mkdir(name, hdr.FileInfo().Mode())
-		case tar.TypeReg, tar.TypeRegA:
-			err = writeErofsFile(ctx, img, name, tr, hdr.Size)
-		case tar.TypeSymlink:
-			err = img.Symlink(hdr.Linkname, name)
-		case tar.TypeLink:
-			err = copyErofsHardlink(ctx, img, name, hdr.Linkname)
-		default:
+		written, err := writeErofsEntry(ctx, w, r, hdr, name)
+		if err != nil {
+			return fmt.Errorf("write %s: %w", name, err)
+		}
+		if !written {
 			continue
 		}
-		if err != nil {
-			return fmt.Errorf("create %s: %w", name, err)
-		}
 
-		if err := applyErofsMetadata(img, name, hdr); err != nil {
+		if err := applyErofsMetadata(w, name, hdr); err != nil {
 			return fmt.Errorf("apply metadata for %s: %w", name, err)
-		}
-
-		if hdr.Typeflag == tar.TypeReg || hdr.Typeflag == tar.TypeRegA {
-			extracted += hdr.Size
-			progress(extracted)
 		}
 	}
 }
 
-func writeErofsFile(ctx context.Context, img *erofs.Writer, name string, r io.Reader, size int64) error {
-	f, err := img.Create(name)
+func writeErofsEntry(ctx context.Context, w *erofs.Writer, r io.Reader, hdr *tar.Header, name string) (bool, error) {
+	switch hdr.Typeflag {
+	case tar.TypeDir:
+		return true, w.Mkdir(name, hdr.FileInfo().Mode())
+	case tar.TypeReg, tar.TypeRegA:
+		return true, writeErofsFile(ctx, w, name, r, hdr.Size)
+	case tar.TypeSymlink:
+		return true, w.Symlink(hdr.Linkname, name)
+	case tar.TypeLink:
+		return true, copyErofsHardlink(ctx, w, name, hdr.Linkname)
+	default:
+		return false, nil
+	}
+}
+
+func writeErofsFile(ctx context.Context, w *erofs.Writer, name string, r io.Reader, size int64) error {
+	f, err := w.Create(name)
 	if err != nil {
 		return err
 	}
@@ -81,19 +139,19 @@ func writeErofsFile(ctx context.Context, img *erofs.Writer, name string, r io.Re
 	return f.Close()
 }
 
-func copyErofsHardlink(ctx context.Context, img *erofs.Writer, name, target string) error {
+func copyErofsHardlink(ctx context.Context, w *erofs.Writer, name, target string) error {
 	target, err := cleanArchiveName(target)
 	if err != nil {
 		return err
 	}
 
-	src, err := img.Open(target)
+	src, err := w.Open(target)
 	if err != nil {
 		return fmt.Errorf("open hard link target %s: %w", target, err)
 	}
 	defer src.Close()
 
-	dst, err := img.Create(name)
+	dst, err := w.Create(name)
 	if err != nil {
 		return err
 	}
@@ -103,18 +161,18 @@ func copyErofsHardlink(ctx context.Context, img *erofs.Writer, name, target stri
 	return dst.Close()
 }
 
-func applyErofsMetadata(img *erofs.Writer, name string, hdr *tar.Header) error {
-	if err := img.Chmod(name, hdr.FileInfo().Mode()); err != nil {
+func applyErofsMetadata(w *erofs.Writer, name string, hdr *tar.Header) error {
+	if err := w.Chmod(name, hdr.FileInfo().Mode()); err != nil {
 		return err
 	}
-	if err := img.Chown(name, hdr.Uid, hdr.Gid); err != nil {
+	if err := w.Chown(name, hdr.Uid, hdr.Gid); err != nil {
 		return err
 	}
-	if err := img.Chtimes(name, hdr.AccessTime, hdr.ModTime); err != nil {
+	if err := w.Chtimes(name, hdr.AccessTime, hdr.ModTime); err != nil {
 		return err
 	}
 	for key, value := range hdr.Xattrs {
-		if err := img.Setxattr(name, key, value); err != nil {
+		if err := w.Setxattr(name, key, value); err != nil {
 			return err
 		}
 	}

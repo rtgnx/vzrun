@@ -6,9 +6,11 @@ import (
 	"context"
 	"io"
 
+	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/rtgnx/vzrun/internal/initd"
 	"github.com/rtgnx/vzrun/internal/vzd/oci"
-	"github.com/rtgnx/vzrun/internal/vzd/storage/osfs"
+	"github.com/rtgnx/vzrun/internal/vzd/storage"
+	"github.com/rtgnx/vzrun/internal/vzd/storage/local"
 	"github.com/rtgnx/vzrun/internal/vzd/vmm"
 	"github.com/rtgnx/vzrun/pkg/types"
 	"github.com/tmc/apple/virtualization"
@@ -18,12 +20,12 @@ import (
 const defaultInit = "/bin/sh"
 
 type VZD struct {
-	store *osfs.Storage
+	store *local.Local
 	vmm   *vmm.VMM
 }
 
 func New(dataDir string) (*VZD, error) {
-	store, err := osfs.New(dataDir)
+	store, err := local.New(dataDir)
 	if err != nil {
 		return nil, err
 	}
@@ -35,12 +37,20 @@ func New(dataDir string) (*VZD, error) {
 }
 
 func (vz *VZD) CreateVM(ctx context.Context, cfg types.VM) (err error) {
-	exec, err := oci.BuildRootDisk(ctx, vz.store, cfg.Name, cfg.Image)
+	ref, err := name.ParseReference(cfg.Image)
 	if err != nil {
 		return err
 	}
+	img, err := oci.NewImageCache(vz.store).Cache(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if err := oci.NewRootDiskBuilder(vz.store).NewRootDisk(ctx, img, cfg.Name); err != nil {
+		return err
+	}
+
 	if cfg.Exec.Command == "" {
-		cfg.Exec = exec
+		cfg.Exec = img.Exec
 	}
 	if err := vz.createRuntimeVM(ctx, cfg); err != nil {
 		return err
@@ -63,7 +73,7 @@ func (vz *VZD) restoreVMs(ctx context.Context) error {
 
 func (vz *VZD) createRuntimeVM(ctx context.Context, cfg types.VM) (err error) {
 	linuxConfig := linuxConfigFromVM(cfg)
-	linuxConfig.DiskPath, err = vz.store.GetVMRootDisk(cfg.Name)
+	linuxConfig.DiskPath, err = vz.store.Lookup(ctx, storage.KindVM, storage.VMRootDiskKey(cfg.Name))
 	linuxConfig.KernelPath = vz.store.KernelPath()
 	linuxConfig.InitrdPath = vz.store.InitrdPath()
 

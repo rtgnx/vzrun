@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	apiv1 "github.com/rtgnx/vzrun/internal/api/v1"
 	"github.com/rtgnx/vzrun/internal/vzd/vmm"
+	apiv1 "github.com/rtgnx/vzrun/pkg/api/v1"
 	"github.com/rtgnx/vzrun/pkg/types"
 	"github.com/tmc/apple/virtualization"
 )
