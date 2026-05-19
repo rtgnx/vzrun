@@ -12,6 +12,7 @@ import (
 	"github.com/rtgnx/vzrun/internal/vzd/storage"
 	"github.com/rtgnx/vzrun/internal/vzd/storage/local"
 	"github.com/rtgnx/vzrun/internal/vzd/vmm"
+	"github.com/rtgnx/vzrun/internal/vzd/volumes"
 	"github.com/rtgnx/vzrun/pkg/types"
 	"github.com/tmc/apple/virtualization"
 	"github.com/tmc/apple/x/vzkit"
@@ -20,8 +21,9 @@ import (
 const defaultInit = "/bin/sh"
 
 type VZD struct {
-	store *local.Local
-	vmm   *vmm.VMM
+	store  *local.Local
+	vmm    *vmm.VMM
+	volman volumes.VolumeManager
 }
 
 func New(dataDir string) (*VZD, error) {
@@ -29,7 +31,7 @@ func New(dataDir string) (*VZD, error) {
 	if err != nil {
 		return nil, err
 	}
-	vz := &VZD{store: store, vmm: vmm.New()}
+	vz := &VZD{store: store, vmm: vmm.New(), volman: volumes.New(store)}
 	if err := vz.restoreVMs(context.Background()); err != nil {
 		return nil, err
 	}
@@ -82,9 +84,19 @@ func (vz *VZD) createRuntimeVM(ctx context.Context, cfg types.VM) (err error) {
 	}
 
 	vzConfig, err := vzkit.BuildLinuxVMConfig(*linuxConfig)
-
 	if err != nil {
 		return err
+	}
+
+	for _, vol := range cfg.Volumes {
+		nv, err := vz.volman.Create(ctx, cfg.Name, vol)
+
+		if err != nil {
+			return err
+		}
+		vzConfig.SetStorageDevices(
+			append(vzConfig.StorageDevices(), nv.Device()),
+		)
 	}
 
 	if err := vz.vmm.Create(ctx, cfg.Name, vzConfig); err != nil {

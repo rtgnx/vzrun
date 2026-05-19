@@ -14,11 +14,19 @@ const (
 	PortModeTCP   PortMode = "tcp"
 )
 
+type Volume struct {
+	Name      string
+	MountPath string
+	SizeGB    uint
+	ReadOnly  bool
+}
+
 type Exec struct {
 	Env     map[string]string
 	Command string
 	Args    []string
 }
+
 type VM struct {
 	Name     string
 	CPUs     int
@@ -26,4 +34,5 @@ type VM struct {
 	Image    string
 	Ports    []Service
 	Exec     Exec
+	Volumes  []Volume
 }
