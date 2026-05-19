@@ -11,6 +11,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+//go:generate env GOOS=linux GOARCH=arm64 go generate ../stage2
 //go:generate env GOOS=linux GOARCH=arm64 go build -o ./stage2.bin ../stage2
 //go:embed stage2.bin
 var stage2 []byte
