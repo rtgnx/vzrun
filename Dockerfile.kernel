@@ -1,0 +1,245 @@
+FROM ghcr.io/void-linux/void-glibc-full:20260501r1 AS builder
+
+RUN xbps-install -Sy
+RUN xbps-install -uy xbps
+RUN xbps-install -Sy  base-devel \
+ git \
+ bc \
+ bison \
+ flex \
+ perl \
+ python3 \
+ ncurses-devel \
+ openssl-devel \
+ elfutils-devel \
+ cpio \
+ rsync \
+ kmod \
+ xz \
+ zstd \
+ lz4 \
+ pahole
+
+WORKDIR /src/kernel
+RUN git clone --depth=1 --branch v7.0.8 \
+  https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git /src/kernel
+
+RUN xbps-install -Sy bash
+
+RUN make ARCH=arm64 defconfig
+RUN ./scripts/config --enable BLK_DEV_INITRD;
+RUN ./scripts/config --enable DEVTMPFS;
+RUN ./scripts/config --enable DEVTMPFS_MOUNT;
+RUN ./scripts/config --enable TMPFS;
+RUN ./scripts/config --enable TMPFS_POSIX_ACL;
+RUN ./scripts/config --enable PROC_FS;
+RUN ./scripts/config --enable SYSFS;
+RUN ./scripts/config --enable EPOLL;
+RUN ./scripts/config --enable SIGNALFD;
+RUN ./scripts/config --enable TIMERFD;
+RUN ./scripts/config --enable EVENTFD;
+
+RUN ./scripts/config --enable SQUASHFS;
+RUN ./scripts/config --enable SQUASHFS_FILE_CACHE;
+RUN ./scripts/config --enable SQUASHFS_XATTR;
+RUN ./scripts/config --enable SQUASHFS_ZLIB;
+RUN ./scripts/config --enable SQUASHFS_LZ4;
+RUN ./scripts/config --enable SQUASHFS_LZO;
+RUN ./scripts/config --enable SQUASHFS_XZ;
+RUN ./scripts/config --enable SQUASHFS_ZSTD;
+
+RUN ./scripts/config --enable OVERLAY_FS;
+RUN ./scripts/config --enable OVERLAY_FS_REDIRECT_DIR;
+RUN ./scripts/config --enable OVERLAY_FS_INDEX;
+RUN ./scripts/config --enable OVERLAY_FS_XINO_AUTO;
+RUN ./scripts/config --enable OVERLAY_FS_METACOPY;
+
+RUN ./scripts/config --enable EXT4_FS;
+RUN ./scripts/config --enable EXT4_USE_FOR_EXT2;
+RUN ./scripts/config --enable 9P_FS;
+RUN ./scripts/config --enable 9P_FS_POSIX_ACL;
+
+RUN ./scripts/config --enable ARM64;
+RUN ./scripts/config --enable OF;
+RUN ./scripts/config --enable OF_FLATTREE;
+RUN ./scripts/config --enable OF_EARLY_FLATTREE;
+RUN ./scripts/config --enable OF_ADDRESS;
+RUN ./scripts/config --enable OF_IRQ;
+RUN ./scripts/config --enable OF_RESERVED_MEM;
+RUN ./scripts/config --enable ACPI;
+RUN ./scripts/config --enable ARM_GIC;
+RUN ./scripts/config --enable ARM_GIC_V3;
+RUN ./scripts/config --enable ARM_GIC_V3_ITS;
+RUN ./scripts/config --enable ARM_PSCI_FW;
+RUN ./scripts/config --enable PSCI;
+RUN ./scripts/config --enable ARM_ARCH_TIMER;
+
+RUN ./scripts/config --enable SERIAL_AMBA_PL011;
+RUN ./scripts/config --enable SERIAL_AMBA_PL011_CONSOLE;
+RUN ./scripts/config --enable SERIAL_8250;
+RUN ./scripts/config --enable SERIAL_8250_CONSOLE;
+RUN ./scripts/config --enable HVC_DRIVER;
+
+RUN ./scripts/config --enable VIRTIO;
+RUN ./scripts/config --enable VIRTIO_MENU;
+RUN ./scripts/config --enable VIRTIO_MMIO;
+RUN ./scripts/config --enable VIRTIO_PCI;
+RUN ./scripts/config --enable VIRTIO_PCI_LEGACY;
+RUN ./scripts/config --enable VIRTIO_BLK;
+RUN ./scripts/config --enable VIRTIO_NET;
+RUN ./scripts/config --enable VIRTIO_CONSOLE;
+RUN ./scripts/config --enable VIRTIO_RNG;
+RUN ./scripts/config --enable VIRTIO_BALLOON;
+RUN ./scripts/config --enable VIRTIO_VSOCKETS;
+RUN ./scripts/config --enable VIRTIO_FS;
+
+RUN ./scripts/config --enable PCI;
+RUN ./scripts/config --enable PCI_HOST_GENERIC;
+RUN ./scripts/config --enable PCI_HOST_COMMON;
+RUN ./scripts/config --enable PCI_MSI;
+RUN ./scripts/config --enable PCI_MSI_IRQ_DOMAIN;
+
+RUN ./scripts/config --enable NET;
+RUN ./scripts/config --enable PACKET;
+RUN ./scripts/config --enable UNIX;
+RUN ./scripts/config --enable INET;
+RUN ./scripts/config --enable IPV6;
+RUN ./scripts/config --enable IP_ADVANCED_ROUTER;
+RUN ./scripts/config --enable IP_MULTIPLE_TABLES;
+RUN ./scripts/config --enable IPV6_MULTIPLE_TABLES;
+RUN ./scripts/config --enable NET_UDP_TUNNEL;
+RUN ./scripts/config --enable TUN;
+RUN ./scripts/config --enable VETH;
+RUN ./scripts/config --enable DUMMY;
+RUN ./scripts/config --enable MACVLAN;
+RUN ./scripts/config --enable VLAN_8021Q;
+RUN ./scripts/config --enable BRIDGE;
+RUN ./scripts/config --enable BRIDGE_NETFILTER;
+
+RUN ./scripts/config --enable WIREGUARD;
+RUN ./scripts/config --enable CRYPTO;
+RUN ./scripts/config --enable CRYPTO_LIB_CURVE25519;
+RUN ./scripts/config --enable CRYPTO_LIB_CHACHA20POLY1305;
+RUN ./scripts/config --enable CRYPTO_LIB_BLAKE2S;
+RUN ./scripts/config --enable CRYPTO_CHACHA20POLY1305;
+RUN ./scripts/config --enable CRYPTO_BLAKE2S;
+RUN ./scripts/config --enable CRYPTO_CURVE25519;
+
+RUN ./scripts/config --enable NETFILTER;
+RUN ./scripts/config --enable NETFILTER_ADVANCED;
+RUN ./scripts/config --enable NF_CONNTRACK;
+RUN ./scripts/config --enable NF_CONNTRACK_MARK;
+RUN ./scripts/config --enable NF_CONNTRACK_EVENTS;
+RUN ./scripts/config --enable NF_NAT;
+RUN ./scripts/config --enable NF_TABLES;
+RUN ./scripts/config --enable NF_TABLES_INET;
+RUN ./scripts/config --enable NF_TABLES_IPV4;
+RUN ./scripts/config --enable NF_TABLES_IPV6;
+RUN ./scripts/config --enable NF_TABLES_NETDEV;
+RUN ./scripts/config --enable NFT_CT;
+RUN ./scripts/config --enable NFT_COUNTER;
+RUN ./scripts/config --enable NFT_LOG;
+RUN ./scripts/config --enable NFT_LIMIT;
+RUN ./scripts/config --enable NFT_MASQ;
+RUN ./scripts/config --enable NFT_REDIR;
+RUN ./scripts/config --enable NFT_NAT;
+RUN ./scripts/config --enable NFT_REJECT;
+RUN ./scripts/config --enable NFT_REJECT_INET;
+RUN ./scripts/config --enable NFT_COMPAT;
+RUN ./scripts/config --enable NFT_FIB;
+RUN ./scripts/config --enable NFT_FIB_INET;
+RUN ./scripts/config --enable NFT_SOCKET;
+RUN ./scripts/config --enable NFT_TPROXY;
+
+RUN ./scripts/config --enable NETFILTER_XTABLES;
+RUN ./scripts/config --enable NETFILTER_XT_MARK;
+RUN ./scripts/config --enable NETFILTER_XT_CONNMARK;
+RUN ./scripts/config --enable NETFILTER_XT_TARGET_MARK;
+RUN ./scripts/config --enable NETFILTER_XT_TARGET_CONNMARK;
+RUN ./scripts/config --enable NETFILTER_XT_TARGET_MASQUERADE;
+RUN ./scripts/config --enable NETFILTER_XT_TARGET_REDIRECT;
+RUN ./scripts/config --enable NETFILTER_XT_TARGET_REJECT;
+RUN ./scripts/config --enable NETFILTER_XT_TARGET_LOG;
+RUN ./scripts/config --enable NETFILTER_XT_TARGET_TCPMSS;
+RUN ./scripts/config --enable NETFILTER_XT_MATCH_ADDRTYPE;
+RUN ./scripts/config --enable NETFILTER_XT_MATCH_CONNTRACK;
+RUN ./scripts/config --enable NETFILTER_XT_MATCH_MARK;
+RUN ./scripts/config --enable NETFILTER_XT_MATCH_MULTIPORT;
+RUN ./scripts/config --enable NETFILTER_XT_MATCH_STATE;
+RUN ./scripts/config --enable NETFILTER_XT_MATCH_TCPMSS;
+RUN ./scripts/config --enable NETFILTER_XT_MATCH_COMMENT;
+
+RUN ./scripts/config --enable IP_NF_IPTABLES;
+RUN ./scripts/config --enable IP_NF_FILTER;
+RUN ./scripts/config --enable IP_NF_TARGET_REJECT;
+RUN ./scripts/config --enable IP_NF_NAT;
+RUN ./scripts/config --enable IP_NF_TARGET_MASQUERADE;
+RUN ./scripts/config --enable IP_NF_MANGLE;
+RUN ./scripts/config --enable IP_NF_RAW;
+RUN ./scripts/config --enable IP6_NF_IPTABLES;
+RUN ./scripts/config --enable IP6_NF_FILTER;
+RUN ./scripts/config --enable IP6_NF_TARGET_REJECT;
+RUN ./scripts/config --enable IP6_NF_MANGLE;
+RUN ./scripts/config --enable IP6_NF_RAW;
+RUN ./scripts/config --enable IP6_NF_NAT;
+RUN ./scripts/config --enable IP6_NF_TARGET_MASQUERADE;
+
+RUN ./scripts/config --enable NAMESPACES;
+RUN ./scripts/config --enable UTS_NS;
+RUN ./scripts/config --enable IPC_NS;
+RUN ./scripts/config --enable USER_NS;
+RUN ./scripts/config --enable PID_NS;
+RUN ./scripts/config --enable NET_NS;
+RUN ./scripts/config --enable CGROUPS;
+RUN ./scripts/config --enable CGROUP_BPF;
+RUN ./scripts/config --enable BPF;
+RUN ./scripts/config --enable BPF_SYSCALL;
+RUN ./scripts/config --enable BPF_JIT;
+
+RUN ./scripts/config --enable HW_RANDOM;
+RUN ./scripts/config --enable HW_RANDOM_VIRTIO;
+RUN ./scripts/config --enable PRINTK;
+RUN ./scripts/config --enable BUG;
+RUN ./scripts/config --enable KALLSYMS;
+
+RUN ./scripts/config --disable DRM;
+RUN ./scripts/config --disable SOUND;
+RUN ./scripts/config --disable SND;
+RUN ./scripts/config --disable HID;
+RUN ./scripts/config --disable USB;
+RUN ./scripts/config --disable WLAN;
+RUN ./scripts/config --disable BT;
+RUN ./scripts/config --disable MEDIA_SUPPORT;
+RUN ./scripts/config --disable INPUT_MOUSE;
+RUN ./scripts/config --disable INPUT_KEYBOARD;
+RUN ./scripts/config --disable JOYSTICK;
+RUN ./scripts/config --disable TOUCHSCREEN;
+RUN ./scripts/config --disable FB;
+RUN ./scripts/config --disable FRAMEBUFFER_CONSOLE;
+
+RUN ./scripts/config --enable EROFS_FS;
+RUN ./scripts/config --enable EROFS_FS_DEBUG;
+RUN ./scripts/config --enable EROFS_FS_XATTR;
+RUN ./scripts/config --enable EROFS_FS_POSIX_ACL;
+RUN ./scripts/config --enable EROFS_FS_SECURITY;
+RUN ./scripts/config --enable EROFS_FS_BACKED_BY_FILE;
+RUN ./scripts/config --enable EROFS_FS_ZIP;
+RUN ./scripts/config --enable EROFS_FS_ZIP_LZMA;
+RUN ./scripts/config --enable EROFS_FS_ZIP_DEFLATE;
+RUN ./scripts/config --enable EROFS_FS_ZIP_ZSTD;
+RUN ./scripts/config --enable EROFS_FS_ZIP_ACCEL;
+RUN ./scripts/config --enable EROFS_FS_ONDEMAND;
+RUN ./scripts/config --enable EROFS_FS_PCPU_KTHREAD;
+RUN ./scripts/config --enable EROFS_FS_PCPU_KTHREAD_HIPRI;
+RUN ./scripts/config --enable EROFS_FS_PAGE_CACHE_SHARE;
+
+
+RUN make ARCH=arm64 olddefconfig
+
+RUN make ARCH=arm64 -j"$(nproc)" Image
+RUN mkdir -p /out && \
+    cp arch/arm64/boot/Image /out/Image && \
+    cp .config /out/kernel.config
+
+FROM scratch
+COPY --from=builder /out/Image /Image

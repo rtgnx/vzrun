@@ -1,0 +1,6 @@
+Image
+init
+initrd.cpio
+/bin/
+linux-machine.id
+cmd/initd/stage1/stage2.bin
